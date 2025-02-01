@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+    <title>NeoCare</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+        }
+
+        .buttons {
+            display: flex;
+            justify-content: left;
+            align-items: center;
+            margin-left: 125px;
+        }
+
+        .buttons button {
+            margin-right: 20px;
+            background-color: transparent;
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 10px;
+        }
+
+        .buttons button:hover {
+            background-color: #00826b;
+            border-radius: 5px;
+        }
+
+        header {
+            background-color: #49c5b1;
+            color: #fff;
+            padding: 10px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        header img {
+            max-width: 100px;
+            height: auto;
+            margin-right: 10px;
+        }
+
+        .label-container {
+            margin-top: 10px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .label {
+            text-align: center;
+            color: #555;
+        }
+
+        .charts {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            margin: 20px;
+        }
+
+        .chart-container {
+            width: 48%;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <img src="LOGO.png" alt="logo">
+        <h1>NeoCare</h1>
+        <div class="buttons">
+            <button id="b1">Home</button>
+            <button id="b2">Login</button>
+            <button id="b3">Products</button>
+            <button id="b4">About Us</button>
+            <button id="b5">PhotoTherapy</button>
+            <button id="b6">Temperature</button>
+            <button id="b7">Report</button>
+        </div>
+    </header>
+
+    <div class="label-container">
+        <div class="label">Heart Rate: <span id="pulse">--</span></div>
+        <div class="label">SpO2: <span id="spo2">--</span></div>
+        <div class="label">Temperature: <span id="temperature">--</span></div>
+        <div class="label">Humidity: <span id="humidity">--</span></div>
+    </div>
+
+    <div class="charts">
+        <div class="chart-container"><canvas id="lineChart1"></canvas></div>
+        <div class="chart-container"><canvas id="lineChart2"></canvas></div>
+        <div class="chart-container"><canvas id="lineChart3"></canvas></div>
+        <div class="chart-container"><canvas id="lineChart4"></canvas></div>
+    </div>
+
+    <audio id="alertSound" loop>
+        <source src="alert.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyB6v8sPTO1SukVtAnbS8FVyTNoh112udyI",
+            authDomain: "acc11-96bcf.firebaseapp.com",
+            databaseURL: "https://acc11-96bcf-default-rtdb.firebaseio.com",
+            projectId: "acc11-96bcf",
+            storageBucket: "acc11-96bcf.firebasestorage.app",
+            messagingSenderId: "986909407379",
+            appId: "1:986909407379:web:faab43ce92f673a281f566",
+            measurementId: "G-Z5JRCJLPRZ"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const charts = [];
+        let heartRateLabel = document.getElementById('pulse');
+        let spo2Label = document.getElementById('spo2');
+        let temperatureLabel = document.getElementById('temperature');
+        let humidityLabel = document.getElementById('humidity');
+        let alertSound = document.getElementById("alertSound");
+
+        function updateLabels() {
+            fetchAndPlot('pulse', 'lineChart1', 'HEART RATE', 0);
+            fetchAndPlot('spo2', 'lineChart2', 'SpO2', 1);
+            fetchAndPlot('temperature', 'lineChart3', 'Temperature', 2);
+            fetchAndPlot('humidity', 'lineChart4', 'Humidity', 3);
+        }
+
+        function fetchAndPlot(key, chartId, label, index) {
+            database.ref(key).limitToLast(6).once('value').then(snapshot => {
+                const data = snapshot.val();
+                const values = data ? Object.values(data) : [];
+                updateChart(chartId, label, values, index);
+                updateLabel(key, values[values.length - 1]);
+            });
+        }
+
+        function updateLabel(key, value) {
+            if (value === undefined) return;
+
+            switch (key) {
+                case 'pulse':
+                    heartRateLabel.textContent = value;
+                    checkHeartRate(value);
+                    break;
+                case 'spo2': spo2Label.textContent = value; break;
+                case 'temperature': temperatureLabel.textContent = value; break;
+                case 'humidity': humidityLabel.textContent = value; break;
+            }
+        }
+
+        function checkHeartRate(rate) {
+            if (rate < 70) {
+                alertSound.play();
+            } else {
+                alertSound.pause();
+                alertSound.currentTime = 0;
+            }
+        }
+
+        function updateChart(chartId, label, values, index) {
+            if (charts[index]) charts[index].destroy();
+            const ctx = document.getElementById(chartId).getContext('2d');
+            charts[index] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: values.map((_, i) => `Label ${i + 1}`),
+                    datasets: [{
+                        label: label,
+                        borderColor: getRandomColor(),
+                        borderWidth: 2,
+                        data: values,
+                    }]
+                }
+            });
+        }
+
+        function getRandomColor() {
+            return `#${Math.floor(Math.random()*16777215).toString(16)}`;
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            updateLabels();
+            setInterval(updateLabels, 5000);
+
+            document.getElementById("b1").addEventListener("click", () => window.location.href = "home.html");
+            document.getElementById("b2").addEventListener("click", () => window.location.href = "login.html");
+            document.getElementById("b3").addEventListener("click", () => window.location.href = "home.html");
+            document.getElementById("b4").addEventListener("click", () => window.location.href = "home.html");
+            document.getElementById("b6").addEventListener("click", () => window.location.href = "qas.html");
+            document.getElementById("b7").addEventListener("click", () => window.open("https://drive.google.com/file/d/1NIzDPXYM5CXQrGh7Tns5weMKo-yC9pJO/view?usp=sharing"));
+
+            let photoButton = document.getElementById("b5");
+            photoButton.addEventListener("click", () => {
+                database.ref("photo").once("value").then(snapshot => {
+                    let newState = snapshot.val() === 1 ? 0 : 1;
+                    database.ref("photo").set(newState);
+                    photoButton.style.backgroundColor = newState ? "#00826b" : "transparent";
+                });
+            });
+        });
+    </script>
+
+</body>
+
+</html>
